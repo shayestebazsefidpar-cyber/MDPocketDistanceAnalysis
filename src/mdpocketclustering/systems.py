@@ -39,7 +39,9 @@ class SystemDefinition:
         return "_".join(m.label for m in self.mutations)
 
     def get_component(self, name: str) -> Component | None:
-        return next((c for c in self.components if c.name == name), None)
+        return next(
+            (c for c in self.components if c.name.lower() == name.lower()), None
+        )
 
     def has_component(self, name: str) -> bool:
         return self.get_component(name) is not None
