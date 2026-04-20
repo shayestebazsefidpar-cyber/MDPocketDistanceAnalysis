@@ -38,8 +38,15 @@ class SystemDefinition:
             return "WT"
         return "_".join(m.label for m in self.mutations)
 
+    def get_component(self, name: str) -> Component | None:
+        return next((c for c in self.components if c.name == name), None)
+
     def has_component(self, name: str) -> bool:
-        return any(c.name.lower() == name.lower() for c in self.components)
+        return self.get_component(name) is not None
+
+    def component_count(self, name: str) -> int:
+        c = self.get_component(name)
+        return c.count if c else 0
 
 
 @dataclass
