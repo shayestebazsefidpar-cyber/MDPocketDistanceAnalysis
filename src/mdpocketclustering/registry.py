@@ -81,8 +81,12 @@ class SimulationRegistry:
                 }
             )
 
-            if hasattr(r, "binding_energy"):
-                row["binding_energy"] = getattr(r, "binding_energy")
+            energy = getattr(r, "binding_energy", None) or getattr(
+                r, "metadata", {}
+            ).get("binding_energy")
+
+            if energy is not None:
+                row["binding_energy"] = energy
 
             if include_components:
                 for c in r.system.components:

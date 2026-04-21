@@ -17,7 +17,7 @@ def make_run(mutation, replicate, energy):
         files=SimulationFiles(__file__, __file__),
     )
 
-    run.binding_energy = energy
+    run.metadata["binding_energy"] = energy
     return run
 
 
