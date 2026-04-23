@@ -2,20 +2,26 @@ import numpy as np
 
 
 def compute_pocket_volume(run, cutoff: float = 8.0, normalize: bool = True):
-
     u = run.universe()
 
     ligand = u.select_atoms("resname AP1 or resname MG1")
 
-    if len(ligand) == 0:
-        raise ValueError(f"No ligand found in run {run.run_id}")
-
     pocket_vol = []
 
-    for ts in u.trajectory:
+    n_frames = len(u.trajectory)
+    start = int(n_frames * 0.8)
+
+    protein = u.select_atoms("protein")
+
+    for i, ts in enumerate(u.trajectory):
+        if i < start:
+            continue
+
         lig_center = ligand.center_of_mass()
 
-        pocket_atoms = u.select_atoms(f"protein and around {cutoff} point {lig_center}")
+        distances = np.linalg.norm(protein.positions - lig_center, axis=1)
+
+        pocket_atoms = protein[distances < cutoff]
 
         pocket_vol.append(len(pocket_atoms))
 
