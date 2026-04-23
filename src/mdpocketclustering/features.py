@@ -2,50 +2,34 @@ import MDAnalysis as mda
 import numpy as np
 
 
-def compute_ligand_pocket_distance(
-    simulation: mda.Universe,
-    stride=100,
-    lig_sel: str = "resname LIG",
-    pocket_distance=8,
-):
-    """Computes the distance from ligand to pocket in one single simulation."""
+def compute_pocket_volume(run, cutoff: float = 8.0, normalize: bool = True):
 
-    u = mda.Universe(simulation.get_topology(), simulation.get_trajectory())
+    u = mda.Universe(run.tpr_path, run.xtc_path)
 
-    lig_atoms = u.select_atoms(lig_sel)
-    protein = u.select_atoms("protein")
+    ligand = u.select_atoms("resname AP1 or resname MG1")
 
-    X = []
-    meta = []
+    if len(ligand) == 0:
+        raise ValueError(f"No ligand found in run {run.run_id}")
 
-    for i, ts in enumerate(u.trajectory[::stride]):
-        pocket = u.select_atoms(f"protein and around {pocket_distance} {lig_sel}")
+    pocket_vol = []
 
-        lig_com = lig_atoms.center_of_mass()
-        prot_com = protein.center_of_mass()
-
-        # --- FIX: safe pocket features for fake/unittest ---
-        if hasattr(pocket, "radius_of_gyration"):
-            pocket_rg = pocket.radius_of_gyration()
-        else:
-            pocket_rg = 0.0  # fallback for fake object
-
-        feat = [
-            np.linalg.norm(lig_com - pocket.center_of_mass()),  # ligand-pocket
-            np.linalg.norm(lig_com - prot_com),  # ligand-protein
-            pocket_rg,  # pocket compactness
-            len(pocket),  # contacts
-        ]
-
-        X.append(feat)
-
-        meta.append(
-            {
-                "replicate": simulation.replicate,
-                "frame": i,
-                "binding_energy": simulation.binding_energy,
-                "mutation": simulation.mutation,
-            }
+    for ts in u.trajectory:
+        # stable pocket definition: distance from ligand atoms
+        pocket_atoms = u.select_atoms(
+            f"(protein) and around {cutoff} (resname AP1 or resname MG1)"
         )
 
-    return np.array(X), meta
+        vol = len(pocket_atoms)
+        pocket_vol.append(vol)
+
+    pocket_vol = np.array(pocket_vol)
+
+    if normalize and len(pocket_vol) > 0:
+        pocket_vol = pocket_vol / (np.max(pocket_vol) + 1e-8)
+
+    return {
+        "run_id": run.run_id,
+        "pocket_volume_ts": pocket_vol,
+        "pocket_volume_mean": float(np.mean(pocket_vol)),
+        "pocket_volume_std": float(np.std(pocket_vol)),
+    }

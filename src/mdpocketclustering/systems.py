@@ -36,6 +36,7 @@ class SystemDefinition:
     def mutation_label(self) -> str:
         if not self.mutations:
             return "WT"
+
         return "_".join(m.label for m in self.mutations)
 
     def get_component(self, name: str) -> Component | None:
