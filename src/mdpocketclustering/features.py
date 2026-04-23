@@ -2,43 +2,45 @@ import numpy as np
 
 
 def compute_pocket_contact_number(run, cutoff: float = 8.0, normalize: bool = True):
-
-    u = run.universe()
-
-    ligand = u.select_atoms("resname AP1 or resname MG1")
     """
     ============================================================
     🧠 PSEUDO-POCKET CONTACT ANALYSIS PIPELINE
     ============================================================
 
     This function estimates ligand–protein pocket compactness
-    using a simple distance-based contact metric.
+    using a distance-based contact metric.
 
-    ------------------------------------------------------------
-    What it does:
-    1) Loads MD trajectory (protein + ligand system)
-    2) Defines ligand as ATP (AP1) + Mg (MG1)
-    3) Computes ligand center of mass (COM) per frame
-    4) Counts number of protein atoms within a cutoff distance
-       from ligand COM
-    5) Builds a time series of "contact number"
-    6) Optionally normalizes values between 0 and 1
-
-    ------------------------------------------------------------
     Biological meaning:
-    - High values → many protein atoms near ligand (tight pocket)
-    - Low values  → fewer contacts (open / weakly bound pocket)
-
-    ------------------------------------------------------------
-    Important note:
-    This is NOT a geometric volume.
-    It is a contact density / proximity index.
-
+    - High values → tight binding pocket
+    - Low values  → open/weak binding state
     ============================================================
     """
+
+    u = run.universe()
+
+    # --------------------------------------------------
+    # Build ligand dynamically from system definition
+    # --------------------------------------------------
+    ligand_names = []
+
+    if run.system.has_component("ATP"):
+        ligand_names.append("AP1")
+
+    if run.system.has_component("MG"):
+        ligand_names.append("MG1")
+
+    if len(ligand_names) == 0:
+        raise ValueError(f"No ligand defined in run {run.run_id}")
+
+    sel = " or ".join([f"resname {r}" for r in ligand_names])
+    ligand = u.select_atoms(sel)
+
     if len(ligand) == 0:
         raise ValueError(f"No ligand found in run {run.run_id}")
 
+    # --------------------------------------------------
+    # Analysis setup
+    # --------------------------------------------------
     n_frames = len(u.trajectory)
     start = int(n_frames * 0.6)
 
@@ -46,6 +48,9 @@ def compute_pocket_contact_number(run, cutoff: float = 8.0, normalize: bool = Tr
 
     contact_ts = []
 
+    # --------------------------------------------------
+    # Main loop over trajectory
+    # --------------------------------------------------
     for i, ts in enumerate(u.trajectory):
         if i < start:
             continue
@@ -60,6 +65,9 @@ def compute_pocket_contact_number(run, cutoff: float = 8.0, normalize: bool = Tr
 
     contact_ts = np.array(contact_ts)
 
+    # --------------------------------------------------
+    # normalization
+    # --------------------------------------------------
     if normalize and len(contact_ts) > 0:
         contact_ts = contact_ts / (contact_ts.max() + 1e-8)
 
