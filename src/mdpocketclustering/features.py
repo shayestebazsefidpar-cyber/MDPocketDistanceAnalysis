@@ -40,7 +40,7 @@ def compute_pocket_contact_number(run, cutoff: float = 8.0, normalize: bool = Tr
         raise ValueError(f"No ligand found in run {run.run_id}")
 
     n_frames = len(u.trajectory)
-    start = int(n_frames)
+    start = int(n_frames * 0.6)
 
     protein = u.select_atoms("protein")
 
