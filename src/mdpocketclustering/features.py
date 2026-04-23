@@ -1,14 +1,14 @@
 import numpy as np
 
 
-def compute_pocket_volume_last20(run, cutoff=8.0):
+def compute_pocket_volume(run, cutoff=8.0):
 
     u = run.universe()
 
     pocket_vol = []
 
     n_frames = len(u.trajectory)
-    start = int(n_frames * 0.8)
+    start = int(n_frames)
 
     for i, ts in enumerate(u.trajectory):
         if i < start:
