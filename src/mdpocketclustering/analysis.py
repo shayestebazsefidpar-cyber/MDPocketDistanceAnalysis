@@ -8,19 +8,6 @@ def aggregate_replicates(
 ) -> pd.DataFrame:
     """
     Compute mean/std/count across replicates for any numeric field.
-
-    Parameters
-    ----------
-    registry : SimulationRegistry
-        Source of simulation runs
-    value : str
-        Column to aggregate (e.g. 'binding_energy')
-    by : list[str], optional
-        Columns to group by. If None, uses ['mutation']
-
-    Returns
-    -------
-    pd.DataFrame
     """
 
     df = registry.to_dataframe()
@@ -37,8 +24,22 @@ def aggregate_replicates(
 
     df = df.dropna(subset=[value]).copy()
 
-    grouped = (
+    return (
         df.groupby(by)[value].agg(mean="mean", std="std", count="count").reset_index()
     )
 
-    return grouped
+
+def cluster_summary(df, X=None):
+    return (
+        df.groupby("cluster")
+        .agg(
+            energy_mean=("binding_energy", "mean"),
+            energy_std=("binding_energy", "std"),
+            count=("cluster", "size"),
+        )
+        .reset_index()
+    )
+
+
+def occupancy(df: pd.DataFrame) -> pd.DataFrame:
+    return pd.crosstab(df["replicate"], df["cluster"], normalize="index") * 100
