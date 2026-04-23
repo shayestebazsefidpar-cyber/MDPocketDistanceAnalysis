@@ -1,20 +1,18 @@
 import numpy as np
 
 
-def compute_pocket_volume(run, cutoff=8.0):
+def compute_pocket_volume(run, cutoff: float = 8.0, normalize: bool = True):
 
     u = run.universe()
 
+    ligand = u.select_atoms("resname AP1 or resname MG1")
+
+    if len(ligand) == 0:
+        raise ValueError(f"No ligand found in run {run.run_id}")
+
     pocket_vol = []
 
-    n_frames = len(u.trajectory)
-    start = int(n_frames)
-
-    for i, ts in enumerate(u.trajectory):
-        if i < start:
-            continue
-
-        ligand = u.select_atoms("resname AP1 or resname MG1")
+    for ts in u.trajectory:
         lig_center = ligand.center_of_mass()
 
         pocket_atoms = u.select_atoms(f"protein and around {cutoff} point {lig_center}")
@@ -23,8 +21,14 @@ def compute_pocket_volume(run, cutoff=8.0):
 
     pocket_vol = np.array(pocket_vol)
 
+    if normalize and len(pocket_vol) > 0:
+        pocket_vol = pocket_vol / (pocket_vol.max() + 1e-8)
+
     return {
-        "mean": float(pocket_vol.mean()) if len(pocket_vol) > 0 else None,
-        "std": float(pocket_vol.std()) if len(pocket_vol) > 0 else None,
-        "ts": pocket_vol,
+        "run_id": run.run_id,
+        "replicate": run.replicate,
+        "mutation": run.system.mutation_label,
+        "pocket_volume_mean": float(pocket_vol.mean()),
+        "pocket_volume_std": float(pocket_vol.std()),
+        "pocket_volume_ts": pocket_vol,
     }
