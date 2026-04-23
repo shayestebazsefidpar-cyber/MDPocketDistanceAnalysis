@@ -99,9 +99,7 @@ class SimulationRegistry:
 
         if include_components:
             component_cols = [c for c in df.columns if c.startswith("has_")]
-            df[component_cols] = (
-                df[component_cols].fillna(False).infer_objects(copy=False)
-            )
+            df[component_cols] = df[component_cols].fillna(False)
 
         return df
 
