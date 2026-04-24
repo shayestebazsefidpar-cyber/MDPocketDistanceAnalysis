@@ -1,83 +1,50 @@
 import numpy as np
+import pandas as pd
 
 
-def compute_pocket_contact_number(run, cutoff: float = 8.0, normalize: bool = True):
-    """
-    ============================================================
-    🧠 PSEUDO-POCKET CONTACT ANALYSIS PIPELINE
-    ============================================================
+def run_global_occupancy(u, run_id, mutation, ligand_sel, cutoff=3.5, bin_size=1000):
 
-    This function estimates ligand–protein pocket compactness
-    using a distance-based contact metric.
-
-    Biological meaning:
-    - High values → tight binding pocket
-    - Low values  → open/weak binding state
-    ============================================================
-    """
-
-    u = run.universe()
-
-    # --------------------------------------------------
-    # Build ligand dynamically from system definition
-    # --------------------------------------------------
-    ligand_names = []
-
-    if run.system.has_component("ATP"):
-        ligand_names.append("AP1")
-
-    if run.system.has_component("MG"):
-        ligand_names.append("MG1")
-
-    if len(ligand_names) == 0:
-        raise ValueError(f"No ligand defined in run {run.run_id}")
-
-    sel = " or ".join([f"resname {r}" for r in ligand_names])
-    ligand = u.select_atoms(sel)
-
-    if len(ligand) == 0:
-        raise ValueError(f"No ligand found in run {run.run_id}")
-
-    # --------------------------------------------------
-    # Analysis setup
-    # --------------------------------------------------
-    n_frames = len(u.trajectory)
-    start = int(n_frames * 0.6)
-
+    lig = u.select_atoms(ligand_sel)
     protein = u.select_atoms("protein")
 
-    contact_ts = []
+    n_res = len(protein.residues)
+    n_frames = len(u.trajectory)
 
-    # --------------------------------------------------
-    # Main loop over trajectory
-    # --------------------------------------------------
-    for i, ts in enumerate(u.trajectory):
-        if i < start:
-            continue
+    frame_occ = []
 
-        lig_center = ligand.center_of_mass()
+    res_atoms = [r.atoms for r in protein.residues]
 
-        distances = np.linalg.norm(protein.positions - lig_center, axis=1)
+    for start in range(0, n_frames, bin_size):
+        bin_occ = []
 
-        contact_atoms = protein[distances < cutoff]
+        for i in range(bin_size):
+            idx = start + i
+            if idx >= n_frames:
+                break
 
-        contact_ts.append(len(contact_atoms))
+            u.trajectory[idx]
 
-    contact_ts = np.array(contact_ts)
+            lig_com = lig.center_of_mass()
 
-    # --------------------------------------------------
-    # normalization
-    # --------------------------------------------------
-    if normalize and len(contact_ts) > 0:
-        contact_ts = contact_ts / (contact_ts.max() + 1e-8)
+            res_coms = np.array([r.center_of_mass() for r in res_atoms])
 
-    return {
-        "run_id": run.run_id,
-        "replicate": run.replicate,
-        "mutation": run.system.mutation_label,
-        "pocket_contact_mean": float(contact_ts.mean())
-        if len(contact_ts) > 0
-        else None,
-        "pocket_contact_std": float(contact_ts.std()) if len(contact_ts) > 0 else None,
-        "pocket_contact_ts": contact_ts,
-    }
+            dists = np.linalg.norm(res_coms - lig_com, axis=1)
+
+            n_contacts = np.sum(dists < cutoff)
+
+            occupancy = n_contacts / n_res
+
+            bin_occ.append(occupancy)
+
+        if len(bin_occ) > 0:
+            frame_occ.append(np.mean(bin_occ))
+
+    return pd.DataFrame(
+        [
+            {
+                "run_id": run_id,
+                "mutation": mutation,
+                "global_occupancy_%": 100 * np.mean(frame_occ),
+            }
+        ]
+    )
