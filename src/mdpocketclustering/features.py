@@ -3,63 +3,38 @@ import pandas as pd
 from MDAnalysis.lib.distances import distance_array
 
 
-def extract_md_features(u, run_id, mutation, ligand_sel, cutoff=3.5, stride=100):
+def extract_md_features(u, run_id, mutation, ligand_sel, cutoff=3.5, stride=10):
     """
     ============================================================
-    🧠 MOLECULAR DYNAMICS FEATURE EXTRACTION (FAST VERSION)
+    🧠 MOLECULAR DYNAMICS FEATURE EXTRACTION (FAST + CLEAN)
     ============================================================
 
     PURPOSE:
-    This function extracts compact, machine-learning-ready features
-    from molecular dynamics trajectories for each simulation run.
-
-    These features are designed for:
-        → PCA (Principal Component Analysis)
-        → clustering of conformational states
-        → comparison of WT vs mutants
-        → fast statistical analysis across replicas
+    Extract compact ML-ready descriptors from MD trajectories
+    for binding analysis and WT vs mutant comparison.
 
     ------------------------------------------------------------
-    METHODOLOGY:
+    FEATURES COMPUTED:
 
-    For each sampled trajectory frame (controlled by stride):
+    1) avg_contact_fraction
+       → fraction of protein atoms within cutoff of ligand
 
-    1) Compute ligand–protein distances using atom-level coordinates
-       (distance_array from MDAnalysis, C-optimized)
+    2) avg_distance
+       → mean ligand–protein atom distance
 
-    2) Define contacts using a cutoff threshold (default = 3.5 Å)
+    3) min_distance
+       → closest observed ligand–protein contact
 
-    3) Extract global descriptors describing binding behavior:
-
-        - avg_contact_fraction:
-            fraction of protein atoms in contact with ligand
-
-        - avg_distance:
-            mean ligand–protein distance
-
-        - min_distance:
-            closest approach between ligand and protein
-
-        - contact_density:
-            density of atomic contacts below cutoff
+    4) contact_density
+       → normalized density of atomic contacts
 
     ------------------------------------------------------------
-    COMPUTATIONAL STRATEGY:
+    BIOPHYSICAL MEANING:
 
-    - Uses vectorized distance calculations (distance_array)
-    - Uses trajectory subsampling (stride) for efficiency
-    - Avoids residue-level loops for scalability
-
-    ------------------------------------------------------------
-    BIOPHYSICAL INTERPRETATION:
-
-    These features describe:
-        → binding strength (contact fraction, min distance)
-        → binding stability (average distance)
-        → interaction richness (contact density)
-
-    Higher contact fraction and lower distance indicate
-    stronger ligand–protein association.
+    ↑ contact_fraction  → stronger binding
+    ↓ avg_distance      → tighter complex
+    ↓ min_distance      → stronger transient contacts
+    ↑ contact_density   → richer interaction network
 
     ============================================================
     """
@@ -69,45 +44,48 @@ def extract_md_features(u, run_id, mutation, ligand_sel, cutoff=3.5, stride=100)
 
     n_res = len(protein.residues)
 
-    feat = []
+    contact_fraction_list = []
+    mean_distance_list = []
+    min_distance_list = []
+    contact_density_list = []
 
     # ============================================================
-    # 🧠 TRAJECTORY SAMPLING (REDUCED COST)
+    # TRAJECTORY SAMPLING
     # ============================================================
     for ts in u.trajectory[::stride]:
         lig_pos = lig.positions
+        prot_pos = protein.positions
 
-        # compute all pairwise atom distances (vectorized)
-        d = distance_array(protein.atoms.positions, lig_pos)
+        # pairwise distances (fast C implementation)
+        d = distance_array(prot_pos, lig_pos)
 
-        # binary contact map (distance cutoff criterion)
         contact_mask = d < cutoff
 
         # ========================================================
-        # 🧠 GLOBAL DESCRIPTORS (PCA-READY FEATURES)
+        # FRAME FEATURES
         # ========================================================
-
-        n_contacts = contact_mask.sum() / n_res
-        mean_dist = d.mean()
-        min_dist = d.min()
+        contact_fraction = contact_mask.sum() / n_res
+        mean_distance = d.mean()
+        min_distance = d.min()
         contact_density = contact_mask.mean()
 
-        feat.append([n_contacts, mean_dist, min_dist, contact_density])
-
-    feat = np.array(feat)
+        contact_fraction_list.append(contact_fraction)
+        mean_distance_list.append(mean_distance)
+        min_distance_list.append(min_distance)
+        contact_density_list.append(contact_density)
 
     # ============================================================
-    # 🧠 FINAL OUTPUT (ONE ROW PER SIMULATION)
+    # FINAL AGGREGATION (ONE ROW PER RUN)
     # ============================================================
     return pd.DataFrame(
         [
             {
                 "run_id": run_id,
                 "mutation": mutation,
-                "avg_contact_fraction": feat[:, 0].mean(),
-                "avg_distance": feat[:, 1].mean(),
-                "min_distance": feat[:, 2].min(),
-                "contact_density": feat[:, 3].mean(),
+                "avg_contact_fraction": np.mean(contact_fraction_list),
+                "avg_distance": np.mean(mean_distance_list),
+                "min_distance": np.min(min_distance_list),
+                "contact_density": np.mean(contact_density_list),
             }
         ]
     )
