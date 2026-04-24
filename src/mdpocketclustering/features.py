@@ -6,41 +6,49 @@ from MDAnalysis.lib.distances import distance_array
 def extract_md_features(u, run_id, mutation, ligand_sel, cutoff=3.5, stride=10):
     """
     ============================================================
-    🧠 MOLECULAR DYNAMICS FEATURE EXTRACTION (FAST + CLEAN)
+    🧠 MOLECULAR DYNAMICS FEATURE EXTRACTION (ROBUST VERSION)
     ============================================================
 
     PURPOSE:
-    Extract compact ML-ready descriptors from MD trajectories
-    for binding analysis and WT vs mutant comparison.
+    Extract ML-ready features from MD trajectories for
+    binding analysis and PCA/clustering.
 
     ------------------------------------------------------------
-    FEATURES COMPUTED:
+    FEATURES:
 
-    1) avg_contact_fraction
-       → fraction of protein atoms within cutoff of ligand
-
-    2) avg_distance
-       → mean ligand–protein atom distance
-
-    3) min_distance
-       → closest observed ligand–protein contact
-
-    4) contact_density
-       → normalized density of atomic contacts
+    1) avg_contact_fraction → binding strength proxy
+    2) avg_distance         → global separation
+    3) min_distance         → closest contact
+    4) contact_density      → interaction richness
 
     ------------------------------------------------------------
-    BIOPHYSICAL MEANING:
-
-    ↑ contact_fraction  → stronger binding
-    ↓ avg_distance      → tighter complex
-    ↓ min_distance      → stronger transient contacts
-    ↑ contact_density   → richer interaction network
+    SAFETY:
+    - Handles missing ligands (empty selections)
+    - Avoids empty array crashes
+    - Returns NaNs if system invalid
 
     ============================================================
     """
 
     lig = u.select_atoms(ligand_sel)
     protein = u.select_atoms("protein")
+
+    # ============================================================
+    # 🧠 SAFETY CHECK (IMPORTANT FIX)
+    # ============================================================
+    if lig.n_atoms == 0 or protein.n_atoms == 0:
+        return pd.DataFrame(
+            [
+                {
+                    "run_id": run_id,
+                    "mutation": mutation,
+                    "avg_contact_fraction": np.nan,
+                    "avg_distance": np.nan,
+                    "min_distance": np.nan,
+                    "contact_density": np.nan,
+                }
+            ]
+        )
 
     n_res = len(protein.residues)
 
@@ -50,20 +58,25 @@ def extract_md_features(u, run_id, mutation, ligand_sel, cutoff=3.5, stride=10):
     contact_density_list = []
 
     # ============================================================
-    # TRAJECTORY SAMPLING
+    # 🧠 TRAJECTORY LOOP
     # ============================================================
     for ts in u.trajectory[::stride]:
         lig_pos = lig.positions
         prot_pos = protein.positions
 
-        # pairwise distances (fast C implementation)
+        # skip if ligand disappears in frame
+        if lig_pos.size == 0 or prot_pos.size == 0:
+            continue
+
+        # pairwise distances
         d = distance_array(prot_pos, lig_pos)
+
+        # skip empty distance arrays
+        if d.size == 0:
+            continue
 
         contact_mask = d < cutoff
 
-        # ========================================================
-        # FRAME FEATURES
-        # ========================================================
         contact_fraction = contact_mask.sum() / n_res
         mean_distance = d.mean()
         min_distance = d.min()
@@ -75,8 +88,22 @@ def extract_md_features(u, run_id, mutation, ligand_sel, cutoff=3.5, stride=10):
         contact_density_list.append(contact_density)
 
     # ============================================================
-    # FINAL AGGREGATION (ONE ROW PER RUN)
+    # 🧠 FINAL OUTPUT (SAFE AGGREGATION)
     # ============================================================
+    if len(contact_fraction_list) == 0:
+        return pd.DataFrame(
+            [
+                {
+                    "run_id": run_id,
+                    "mutation": mutation,
+                    "avg_contact_fraction": np.nan,
+                    "avg_distance": np.nan,
+                    "min_distance": np.nan,
+                    "contact_density": np.nan,
+                }
+            ]
+        )
+
     return pd.DataFrame(
         [
             {
