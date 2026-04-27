@@ -1,109 +1,43 @@
 import numpy as np
-import MDAnalysis as mda
 from MDAnalysis.coordinates.memory import MemoryReader
 from MDAnalysis.core.universe import Universe
-from ipymolstar import PDBeMolstar
+
+from mdpocketclustering.mdanalysis_molstar_viewer import show_mda_frame
 
 
-# ============================================================
-# 🎯 YOUR VIEWER FUNCTION (clean version used in pipeline)
-# ============================================================
-def show_mda_molstar_frame(universe, frame, selection="all"):
-    """
-    Show MDAnalysis frame in Mol* without PDBWriter (no warnings).
-    """
+def test_show_mda_frame_runs():
 
-    universe.trajectory[frame]
-    atoms = universe.select_atoms(selection)
+    n_atoms = 50
+    n_residues = 10
+    n_frames = 5
 
-    coords = atoms.positions
-    resnames = atoms.resnames
-    resids = atoms.resids
-    names = atoms.names
-    segids = atoms.segids
+    coords = np.random.rand(n_frames, n_atoms, 3) * 10
 
-    pdb_lines = []
+    # ============================================================
+    # 🧬 TOPOLOGY (FIXED ONLY IN TEST)
+    # ============================================================
 
-    for i, (coord, resn, resid, name, seg) in enumerate(
-        zip(coords, resnames, resids, names, segids), start=1
-    ):
-        x, y, z = coord
-
-        pdb_lines.append(
-            "ATOM  {i:5d} {name:^4s} {resn:>3s} {chain:1s}"
-            "{resid:4d}    "
-            "{x:8.3f}{y:8.3f}{z:8.3f}"
-            "  1.00  0.00           {elem:>2s}".format(
-                i=i,
-                name=name[:4],
-                resn=resn,
-                chain=seg if len(seg) == 1 else "A",
-                resid=resid,
-                x=x,
-                y=y,
-                z=z,
-                elem=name[0],
-            )
-        )
-
-    pdb_string = "\n".join(pdb_lines).encode("utf-8")
-
-    view = PDBeMolstar(
-        custom_data={
-            "data": pdb_string,
-            "format": "pdb",
-            "binary": False,
-        },
-        hide_controls_icon=True,
-        hide_expand_icon=True,
-        hide_settings_icon=True,
-        hide_selection_icon=True,
-        hide_animation_icon=True,
-        hide_water=True,
-        hide_carbs=True,
+    u = Universe.empty(
+        n_atoms,
+        n_residues=n_residues,
+        atom_resindex=np.repeat(np.arange(n_residues), 5),
+        trajectory=True,
     )
 
-    return view
+    # atom-level attributes
+    u.add_TopologyAttr("name", ["CA"] * n_atoms)
 
+    # residue-level attributes
+    u.add_TopologyAttr("resname", ["ALA"] * n_residues)
+    u.add_TopologyAttr("resid", np.arange(1, n_residues + 1))
 
-# ============================================================
-# 🧪 FAKE MD SYSTEM (NO FILES)
-# ============================================================
+    # segment-level attribute (IMPORTANT FIX)
+    u.add_TopologyAttr("segid", ["A"])  # ✅ FIXED (ONLY 1 VALUE)
 
-n_atoms = 50
-n_frames = 5
+    # trajectory
+    u.load_new(coords, format=MemoryReader)
 
-# fake trajectory: (frames, atoms, xyz)
-coords = np.random.rand(n_frames, n_atoms, 3) * 10
+    # call your function (UNCHANGED)
+    view = show_mda_frame(u, frame=2)
 
-
-# ============================================================
-# 🧬 BUILD FAKE TOPOLOGY
-# ============================================================
-
-u = Universe.empty(
-    n_atoms,
-    n_residues=10,
-    atom_resindex=np.repeat(np.arange(10), 5),
-    trajectory=True
-)
-
-u.add_TopologyAttr("name", ["CA"] * n_atoms)
-u.add_TopologyAttr("resname", ["ALA"] * 10)
-u.add_TopologyAttr("resid", np.repeat(np.arange(1, 11), 5))
-u.add_TopologyAttr("segid", ["A"] * n_atoms)
-
-
-# ============================================================
-# 🎞️ ATTACH FAKE TRAJECTORY
-# ============================================================
-
-u.load_new(coords, format=MemoryReader)
-
-
-# ============================================================
-# 🔬 TEST VIEWER
-# ============================================================
-
-view = show_mda_molstar_frame(u, frame=2)
-view
+    assert view is not None
