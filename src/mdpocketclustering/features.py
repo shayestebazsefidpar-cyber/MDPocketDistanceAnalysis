@@ -1,118 +1,53 @@
 import numpy as np
 import pandas as pd
-from MDAnalysis.lib.distances import distance_array
 
 
-def extract_md_features(u, run_id, mutation, ligand_sel, cutoff=3.5, stride=10):
+def extract_md_features(
+    u, run_id, mutation, ligand_sel, cutoff=8.0, stride=10, return_sparse=True
+):
     """
-    ============================================================
-    🧠 MOLECULAR DYNAMICS FEATURE EXTRACTION (ROBUST VERSION)
-    ============================================================
+    Ligand–residue interaction fingerprint (MD-based).
 
-    PURPOSE:
-    Extract ML-ready features from MD trajectories for
-    binding analysis and PCA/clustering.
-
-    ------------------------------------------------------------
-    FEATURES:
-
-    1) avg_contact_fraction → binding strength proxy
-    2) avg_distance         → global separation
-    3) min_distance         → closest contact
-    4) contact_density      → interaction richness
-
-    ------------------------------------------------------------
-    SAFETY:
-    - Handles missing ligands (empty selections)
-    - Avoids empty array crashes
-    - Returns NaNs if system invalid
-
-    ============================================================
+    Features:
+    - min atom-atom distance per residue per frame
+    - cutoff-based sparsification (optional)
     """
 
     lig = u.select_atoms(ligand_sel)
     protein = u.select_atoms("protein")
 
-    # ============================================================
-    # 🧠 SAFETY CHECK (IMPORTANT FIX)
-    # ============================================================
     if lig.n_atoms == 0 or protein.n_atoms == 0:
-        return pd.DataFrame(
-            [
-                {
-                    "run_id": run_id,
-                    "mutation": mutation,
-                    "avg_contact_fraction": np.nan,
-                    "avg_distance": np.nan,
-                    "min_distance": np.nan,
-                    "contact_density": np.nan,
-                }
-            ]
-        )
+        return pd.DataFrame()
 
-    n_res = len(protein.residues)
+    residues = protein.residues
+    data = []
 
-    contact_fraction_list = []
-    mean_distance_list = []
-    min_distance_list = []
-    contact_density_list = []
+    frames = u.trajectory[::stride]
 
-    # ============================================================
-    # 🧠 TRAJECTORY LOOP
-    # ============================================================
-    for ts in u.trajectory[::stride]:
+    for i, ts in enumerate(frames):
         lig_pos = lig.positions
-        prot_pos = protein.positions
 
-        # skip if ligand disappears in frame
-        if lig_pos.size == 0 or prot_pos.size == 0:
-            continue
+        row = {
+            "run_id": run_id,
+            "mutation": mutation,
+            "frame": i,
+        }
 
-        # pairwise distances
-        d = distance_array(prot_pos, lig_pos)
+        for res in residues:
+            res_pos = res.atoms.positions
 
-        # skip empty distance arrays
-        if d.size == 0:
-            continue
+            dists = np.linalg.norm(res_pos[:, None, :] - lig_pos[None, :, :], axis=-1)
 
-        contact_mask = d < cutoff
+            min_dist = dists.min()
 
-        contact_fraction = contact_mask.sum() / n_res
-        mean_distance = d.mean()
-        min_distance = d.min()
-        contact_density = contact_mask.mean()
+            col = f"{res.resname}{res.resid}"
 
-        contact_fraction_list.append(contact_fraction)
-        mean_distance_list.append(mean_distance)
-        min_distance_list.append(min_distance)
-        contact_density_list.append(contact_density)
+            if return_sparse:
+                if min_dist < cutoff:
+                    row[col] = min_dist
+            else:
+                row[col] = min_dist
 
-    # ============================================================
-    # 🧠 FINAL OUTPUT (SAFE AGGREGATION)
-    # ============================================================
-    if len(contact_fraction_list) == 0:
-        return pd.DataFrame(
-            [
-                {
-                    "run_id": run_id,
-                    "mutation": mutation,
-                    "avg_contact_fraction": np.nan,
-                    "avg_distance": np.nan,
-                    "min_distance": np.nan,
-                    "contact_density": np.nan,
-                }
-            ]
-        )
+        data.append(row)
 
-    return pd.DataFrame(
-        [
-            {
-                "run_id": run_id,
-                "mutation": mutation,
-                "avg_contact_fraction": np.mean(contact_fraction_list),
-                "avg_distance": np.mean(mean_distance_list),
-                "min_distance": np.min(min_distance_list),
-                "contact_density": np.mean(contact_density_list),
-            }
-        ]
-    )
+    return pd.DataFrame(data)
