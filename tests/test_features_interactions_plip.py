@@ -1,9 +1,10 @@
-import MDAnalysis as mda
+import warnings
 
+from MDAnalysis import MissingDataWarning
+
+warnings.filterwarnings("ignore")
 # import function from your module
-from mdpocketclustering.features_interactions_plip import (
-    retrieve_plip_interactions,
-)
+from mdpocketclustering.features_interactions_plip import retrieve_plip_interactions
 
 
 def main():
