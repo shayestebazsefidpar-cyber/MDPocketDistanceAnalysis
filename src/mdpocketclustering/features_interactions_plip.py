@@ -10,7 +10,7 @@ def retrieve_plip_interactions(
     run_id,
     mutation,
     ligand_sel,
-    stride=1000,
+    stride=10,
 ):
 
     results = []
