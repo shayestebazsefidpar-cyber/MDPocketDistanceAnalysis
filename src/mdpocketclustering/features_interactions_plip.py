@@ -1,73 +1,65 @@
 import tempfile
 
-import MDAnalysis as mda
+import pandas as pd
 from plip.exchange.report import BindingSiteReport
 from plip.structure.preparation import PDBComplex
 
 
 def retrieve_plip_interactions(
-    u,
-    run_id,
-    mutation,
-    ligand_sel,
-    stride=10,
+    u, run_id, mutation, ligand_sel, frame_id=0, debug=False
 ):
+
+    protein = u.select_atoms("protein")
+    ligand = u.select_atoms(ligand_sel)
+
+    if len(ligand) == 0:
+        print("❌ No ligand found")
+        return pd.DataFrame()
+
+    atoms = protein + ligand
+
+    with tempfile.NamedTemporaryFile(suffix=".pdb", delete=False) as tmp:
+        atoms.write(tmp.name)
+        pdb_path = tmp.name
+
+    if debug:
+        print("PDB path:", pdb_path)
+
+    mol = PDBComplex()
+    mol.load_pdb(pdb_path)
 
     results = []
 
-    for ts in u.trajectory[::stride]:
-        protein_atoms = u.select_atoms("protein")
-        ligand_atoms = u.select_atoms(ligand_sel)
+    for lig in mol.ligands:
+        mol.characterize_complex(lig)
 
-        atoms = protein_atoms + ligand_atoms
+    for site_id, site in mol.interaction_sets.items():
+        report = BindingSiteReport(site)
 
-        with tempfile.NamedTemporaryFile(suffix=".pdb", delete=False) as tmp:
-            atoms.write(tmp.name)
-            pdb_path = tmp.name
+        for itype in [
+            "hydrophobic",
+            "hbond",
+            "saltbridge",
+            "pistacking",
+            "pication",
+            "halogen",
+            "metal",
+            "waterbridge",
+        ]:
+            feats = getattr(report, f"{itype}_features", None)
 
-        protlig = PDBComplex()
-        protlig.load_pdb(pdb_path)
+            if not feats:
+                continue
 
-        for ligand in protlig.ligands:
-            protlig.characterize_complex(ligand)
+            results.append(
+                {
+                    "run_id": run_id,
+                    "mutation": mutation,
+                    "frame": frame_id,
+                    "ligand_site": site_id,
+                    "interaction_type": itype,
+                    "count": len(feats),
+                }
+            )
 
-        for key, site in protlig.interaction_sets.items():
-            binding_site = BindingSiteReport(site)
-
-            for t in [
-                "hydrophobic",
-                "hbond",
-                "saltbridge",
-                "pistacking",
-                "pication",
-                "halogen",
-                "metal",
-                "waterbridge",
-            ]:
-                features = getattr(binding_site, f"{t}_features", None)
-
-                if not features:
-                    continue
-
-                if ":" in key:
-                    resname, chain, resid = key.split(":")
-                else:
-                    resname, chain, resid = key, None, None
-
-                site_type = "ligand" if resname in ligand_sel else "protein"
-
-                results.append(
-                    {
-                        "run_id": run_id,
-                        "mutation": mutation,
-                        "frame": ts.frame,
-                        "ligand_site": key,
-                        "resname": resname,
-                        "chain": chain,
-                        "resid": resid,
-                        "site_type": site_type,
-                        "interaction_type": t,
-                    }
-                )
-
-    return results
+    return pd.DataFrame(results)
