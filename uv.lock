@@ -1071,6 +1071,7 @@ dependencies = [
     { name = "mdance" },
     { name = "povme" },
     { name = "prolif" },
+    { name = "rdkit" },
 ]
 
 [package.dev-dependencies]
@@ -1086,6 +1087,7 @@ requires-dist = [
     { name = "mdance", specifier = ">=0.4.0" },
     { name = "povme", git = "https://github.com/durrantlab/POVME.git" },
     { name = "prolif", specifier = ">=2.1.0" },
+    { name = "rdkit", specifier = ">=2026.3.1" },
 ]
 
 [package.metadata.requires-dev]
@@ -2066,6 +2068,30 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/f1/13/0db535102d0256b350ca116d8987588aca1a1f9ebb4638e1e1ff88bbcef8/ray-2.55.1-cp312-cp312-manylinux2014_aarch64.whl", hash = "sha256:26541f69bb55607ef8335baac75b2ed12ff2ce02d56313219b29eda003039221", size = 72910802, upload-time = "2026-04-22T20:10:04.382Z" },
     { url = "https://files.pythonhosted.org/packages/4c/f8/fffadf3f4285eebd460e4d7f2ed1c0cd641ed89613c3f49eb881ee9fa7e2/ray-2.55.1-cp312-cp312-manylinux2014_x86_64.whl", hash = "sha256:263705f6bab29e7622a94f82da25fd7f9cead76cdf89a07aab28f79cdf8f9d95", size = 73765203, upload-time = "2026-04-22T20:10:10.495Z" },
     { url = "https://files.pythonhosted.org/packages/10/f7/5acb86fc9625a0e6bbc40e1c7d42c60770e78585439a921c32738b6d675a/ray-2.55.1-cp312-cp312-win_amd64.whl", hash = "sha256:9ad56704c8bd7e92130162f9c58e4ef473609515637673d5a36e761f95335206", size = 27865547, upload-time = "2026-04-22T20:10:15.364Z" },
+]
+
+[[package]]
+name = "rdkit"
+version = "2026.3.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.4.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "pillow" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/79/1e/310cca5257a92f6f384269c2c2729ec564071d4159f43f58047e353b12ee/rdkit-2026.3.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:bdcd6ff790ad7397a743bd9f6e0750993a926dff43440dbeb1563a226620d4f1", size = 29858634, upload-time = "2026-04-05T11:26:13.748Z" },
+    { url = "https://files.pythonhosted.org/packages/99/68/578cbbdb7ae7adfeee8459322c4475a3c92d3890f961bd584e6d950bfd7b/rdkit-2026.3.1-cp310-cp310-manylinux_2_28_aarch64.whl", hash = "sha256:d437efa1d70d75379f0bd6675a4e5ce39c7b1a31b10489c17b352748a4cda0f3", size = 35617106, upload-time = "2026-04-05T11:26:17.905Z" },
+    { url = "https://files.pythonhosted.org/packages/c7/29/6999f90b0f192608ed732dfe9cd5aa7f0e12b5b45abaac48abf4577dfcc1/rdkit-2026.3.1-cp310-cp310-manylinux_2_28_x86_64.whl", hash = "sha256:ce538ef325642c288de7cb00eecf220962cf11a913a027a76f1aa6a1edaf1ff7", size = 37062231, upload-time = "2026-04-05T11:26:22.043Z" },
+    { url = "https://files.pythonhosted.org/packages/c5/f3/0857115b513fb31efec927f2bab52290fcb04d8767a61e780f61323b5790/rdkit-2026.3.1-cp310-cp310-win_amd64.whl", hash = "sha256:37a971ccfac6b909e4a4601a7c64c55fcf8d8eb9ae02397f45ec74553919b49a", size = 24515899, upload-time = "2026-04-05T11:26:25.88Z" },
+    { url = "https://files.pythonhosted.org/packages/87/54/e4fb88a6bce76424ba76b2aee3941115fc58ff19c9bed0d3a39743171a5a/rdkit-2026.3.1-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:41edffacdf49ddb502688e00a7e349cdfe895bfeefc59a4859b9387f7839985a", size = 29858944, upload-time = "2026-04-05T11:26:29.395Z" },
+    { url = "https://files.pythonhosted.org/packages/08/5c/b999261bf7419398133abf3f9ba58776d1f0e584f36cc66aed1860bd8835/rdkit-2026.3.1-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:092cc114ba3fd76c85da0c9a1e8831be53dc70236448b671d70919c2e8c52384", size = 35613411, upload-time = "2026-04-05T11:26:33.852Z" },
+    { url = "https://files.pythonhosted.org/packages/4d/a3/890e65ede0231b39aa0f93d03b109977ee0307eb8b5363b306e82c736bc5/rdkit-2026.3.1-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:97cd3081224629caf169a531d6350c8f5b3fcc16dc85e6dad0209a7a15a909f4", size = 37061286, upload-time = "2026-04-05T11:26:38.103Z" },
+    { url = "https://files.pythonhosted.org/packages/86/c3/cdf07922c6f7db0026fb08d8e107530b8d4465a4b03ce0e9b3789bd87f7b/rdkit-2026.3.1-cp311-cp311-win_amd64.whl", hash = "sha256:394b15d92df6fb011744502322b3e4de94ef939f628c384fea83aabb224ea8c7", size = 24515977, upload-time = "2026-04-05T11:26:41.375Z" },
+    { url = "https://files.pythonhosted.org/packages/49/b8/b63e73f8849e90b673965e581e53a2b2620aa3be25e8e3bfce72f5f6c10f/rdkit-2026.3.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:14e050ffa5d6c5b6b8c87435888c017dcc9fb1fde763f5a49c78bb331aac8c8b", size = 29903263, upload-time = "2026-04-05T11:26:45.301Z" },
+    { url = "https://files.pythonhosted.org/packages/ba/b3/e6b7c7da20fa18c8924fc19c86300431ae5b57892b752aad7289c47f883f/rdkit-2026.3.1-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:7b2480bdbbf8d20cf857a635a40de249a97d619a5ae270d840771cc6bdb4979c", size = 35499474, upload-time = "2026-04-05T11:26:49.328Z" },
+    { url = "https://files.pythonhosted.org/packages/ef/db/5b1cddbcf0f44e74d1a7756d0c3551c7507d05656a2ac55e6d0d17f69f04/rdkit-2026.3.1-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:a84112a2f33256789319e1142f005f19333161549b1b3e86a0945d6545ace851", size = 36996740, upload-time = "2026-04-05T11:26:53.113Z" },
+    { url = "https://files.pythonhosted.org/packages/e2/bf/6441076139ce0dbcb063f2fe1d89a5a3a2179215c459932865c088bb4668/rdkit-2026.3.1-cp312-cp312-win_amd64.whl", hash = "sha256:8be158d43c7f5a31822a8195e6f036e4227a085d3029636a815a00f6ec3dfa5e", size = 24536311, upload-time = "2026-04-05T11:26:57.109Z" },
 ]
 
 [[package]]
