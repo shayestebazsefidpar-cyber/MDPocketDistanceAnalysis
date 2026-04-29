@@ -42,7 +42,7 @@ def retrieve_prolif_frame_residue(
 
     rows = []
 
-    fp.run(u.trajectory[:stride], ligand, protein)
+    fp.run(u.trajectory[::stride], ligand, protein)
     df = fp.to_dataframe()
 
     return df
