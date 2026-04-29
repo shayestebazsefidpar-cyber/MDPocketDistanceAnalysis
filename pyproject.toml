@@ -8,6 +8,7 @@ dependencies = [
     "ipykernel>=7.2.0",
     "mdance>=0.4.0",
     "povme",
+    "prolif>=2.1.0",
 ]
 
 [project.scripts]
