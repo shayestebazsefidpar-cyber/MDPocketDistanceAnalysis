@@ -90,7 +90,7 @@ def test_run_called_with_correct_arguments(mock_fp_cls):
 
     args, kwargs = mock_fp.run.call_args
 
-    assert args[0] == u.trajectory[:20]
+    assert args[0] == u.trajectory[::20]
 
 
 @patch("mdpocketclustering.analysis_prolif.Fingerprint")
@@ -136,4 +136,4 @@ def test_stride_is_used(mock_fp_cls):
     )
 
     args, kwargs = mock_fp.run.call_args
-    assert args[0] == u.trajectory[:50]
+    assert args[0] == u.trajectory[::50]
