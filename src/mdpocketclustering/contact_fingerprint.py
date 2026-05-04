@@ -42,7 +42,7 @@ def compute_ligand_residue_contacts(
         row = {
             "run_id": run_id,
             "mutation": mutation,
-            "frame": i,
+            "frame": ts.frame,
             "time_ps": ts.time if hasattr(ts, "time") else i * stride,
         }
 
