@@ -43,9 +43,6 @@ def test_run_prolif_for_registry(mock_fp_class, mock_universe):
     mock_u.select_atoms.return_value.__len__.return_value = 5
     mock_u.trajectory = list(range(10))
 
-    # -------------------------
-    # mock Fingerprint
-    # -------------------------
     mock_fp = MagicMock()
     mock_fp_class.return_value = mock_fp
 
@@ -64,9 +61,6 @@ def test_run_prolif_for_registry(mock_fp_class, mock_universe):
         registry, ligand_sel="resname AP1 or resname MG1", stride=20, n_jobs=1
     )
 
-    # -------------------------
-    # assertions
-    # -------------------------
     assert isinstance(df, pd.DataFrame)
     assert "Frame" in df.columns
     assert "ligand" in df.columns
