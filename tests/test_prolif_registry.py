@@ -4,10 +4,6 @@ import pandas as pd
 
 from mdpocketclustering.analysis_prolif_registry import run_prolif_for_registry
 
-# -------------------------
-# Fake objects
-# -------------------------
-
 
 class FakeMutation:
     def __init__(self):
@@ -32,11 +28,6 @@ class FakeRun:
 class FakeRegistry:
     def __init__(self):
         self.runs = [FakeRun("run1"), FakeRun("run2")]
-
-
-# -------------------------
-# TEST
-# -------------------------
 
 
 @patch("mdpocketclustering.analysis_prolif_registry.mda.Universe")
@@ -67,9 +58,6 @@ def test_run_prolif_for_registry(mock_fp_class, mock_universe):
 
     mock_fp.to_dataframe.return_value = fake_df
 
-    # -------------------------
-    # run function
-    # -------------------------
     registry = FakeRegistry()
 
     df = run_prolif_for_registry(
