@@ -13,10 +13,6 @@ def test_show_mda_frame_runs():
 
     coords = np.random.rand(n_frames, n_atoms, 3) * 10
 
-    # ============================================================
-    # 🧬 TOPOLOGY (FIXED ONLY IN TEST)
-    # ============================================================
-
     u = Universe.empty(
         n_atoms,
         n_residues=n_residues,
