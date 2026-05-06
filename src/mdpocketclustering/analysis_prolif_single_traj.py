@@ -5,7 +5,7 @@ from prolif import Fingerprint
 
 def run_prolif_for_single_traj(
     run,
-    ligand_sel="resname AP1",
+    ligand_sel="resname AP1 or resname MG1",
     stride=20,
 ):
     """
