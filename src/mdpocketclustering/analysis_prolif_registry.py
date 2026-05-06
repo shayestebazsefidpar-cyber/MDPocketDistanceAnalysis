@@ -12,17 +12,11 @@ def run_prolif_for_registry(
     stride=20,
     n_jobs=1,
 ):
-    """
-    Full ProLIF pipeline for entire registry (multi-trajectory)
-    returns: dict of DataFrames grouped by mutation
-    """
 
     def run_single(run):
 
-        # --- build universe ---
         u = mda.Universe(run.files.topology, run.files.trajectory)
 
-        # --- mutation ---
         muts = run.system.mutations
         mutation = (
             f"{muts[0].chain}:{muts[0].wildtype}{muts[0].resid}{muts[0].mutant}"
@@ -37,7 +31,6 @@ def run_prolif_for_registry(
             print(f"❌ No ligand in run {run.run_id}")
             return pd.DataFrame()
 
-        # --- ProLIF ---
         fp = Fingerprint(
             [
                 "HBDonor",
@@ -58,13 +51,11 @@ def run_prolif_for_registry(
         fp.run(u.trajectory[::stride], ligand, protein)
         df = fp.to_dataframe()
 
-        # --- metadata ---
         meta = {
             "run_id": run.run_id,
             "mutation": mutation,
         }
 
-        # --- convert to long ---
         core = df.drop(columns=list(meta.keys()), errors="ignore")
         core.columns = pd.MultiIndex.from_tuples(core.columns)
 
@@ -92,6 +83,4 @@ def run_prolif_for_registry(
     else:
         results = Parallel(n_jobs=n_jobs)(delayed(run_single)(r) for r in registry.runs)
 
-    all_df = pd.concat(results, ignore_index=True)
-
-    return all_df
+    return pd.concat(results, ignore_index=True)
