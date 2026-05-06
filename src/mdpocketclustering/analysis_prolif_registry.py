@@ -8,7 +8,7 @@ from prolif import Fingerprint
 
 def run_prolif_for_registry(
     registry,
-    ligand_sel="resname AP1 or resname MG1",
+    ligand_sel="resname AP1",
     stride=20,
     n_jobs=1,
 ):
