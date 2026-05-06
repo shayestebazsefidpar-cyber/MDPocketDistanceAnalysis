@@ -1,3 +1,4 @@
+import os
 from collections import defaultdict
 
 import MDAnalysis as mda
@@ -13,8 +14,26 @@ def run_prolif_for_registry(
     n_jobs=1,
 ):
 
+    # -----------------------------
+    # checkpoint folder (global for function)
+    # -----------------------------
+    checkpoint_dir = "checkpoints_prolif"
+    os.makedirs(checkpoint_dir, exist_ok=True)
+
     def run_single(run):
 
+        checkpoint_file = os.path.join(checkpoint_dir, f"{run.run_id}.csv")
+
+        # -----------------------------
+        # SKIP if already computed
+        # -----------------------------
+        if os.path.exists(checkpoint_file):
+            print(f"⏩ Skip {run.run_id}")
+            return pd.read_csv(checkpoint_file)
+
+        # -----------------------------
+        # load system
+        # -----------------------------
         u = mda.Universe(run.files.topology, run.files.trajectory)
 
         muts = run.system.mutations
@@ -31,6 +50,9 @@ def run_prolif_for_registry(
             print(f"❌ No ligand in run {run.run_id}")
             return pd.DataFrame()
 
+        # -----------------------------
+        # fingerprint setup
+        # -----------------------------
         fp = Fingerprint(
             [
                 "HBDonor",
@@ -76,8 +98,17 @@ def run_prolif_for_registry(
         for k, v in meta.items():
             long_df[k] = v
 
+        # -----------------------------
+        # SAVE CHECKPOINT
+        # -----------------------------
+        long_df.to_csv(checkpoint_file, index=False)
+        print(f"💾 Saved: {checkpoint_file}")
+
         return long_df
 
+    # -----------------------------
+    # RUN (serial or parallel)
+    # -----------------------------
     if n_jobs == 1:
         results = [run_single(r) for r in registry.runs]
     else:
