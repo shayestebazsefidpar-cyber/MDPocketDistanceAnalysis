@@ -12,8 +12,13 @@ class SingleTrajectoryRunner:
     def run_metric(self, metric, stride=1):
         values = metric.compute(self.traj, self.run.system, stride=stride)
 
-        return pd.DataFrame(
+        df = pd.DataFrame(
             {"time": np.arange(len(values)) * stride, metric.name: values}
         )
+
+        # ✅ ADD THIS LINE
+        df["run_id"] = self.run.run_id
+
+        return df
 
         return pd.DataFrame({"time": np.arange(len(values)), metric.name: values})
