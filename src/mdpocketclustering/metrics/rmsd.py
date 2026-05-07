@@ -1,4 +1,4 @@
-import numpy as np
+from MDAnalysis.analysis.rms import RMSD
 
 
 class ProteinRMSD:
@@ -7,18 +7,10 @@ class ProteinRMSD:
     def compute(self, traj, system, stride=20):
         u = traj.u
 
-        ref = u.select_atoms("protein and backbone")
-        ref_pos = ref.positions.copy()
+        rmsd_calc = RMSD(u, u, select="protein and backbone", ref_frame=0, step=stride)
+        rmsd_calc.run()
 
-        rmsd = []
-
-        for ts in u.trajectory[::stride]:
-            mob = u.select_atoms("protein and backbone")
-
-            diff = mob.positions - ref_pos
-            rmsd.append(np.sqrt((diff**2).mean()))
-
-        return np.array(rmsd)
+        return rmsd_calc.results.rmsd[:, 2]
 
 
 class LigandRMSD:
@@ -27,15 +19,7 @@ class LigandRMSD:
     def compute(self, traj, system, stride=20):
         u = traj.u
 
-        ligand = u.select_atoms("resname LIG")
-        ref_pos = ligand.positions.copy()
+        rmsd_calc = RMSD(u, u, select="resname AP1", ref_frame=0, step=stride)
+        rmsd_calc.run()
 
-        rmsd = []
-
-        for ts in u.trajectory[::stride]:
-            mob = u.select_atoms("resname LIG")
-
-            diff = mob.positions - ref_pos
-            rmsd.append(np.sqrt((diff**2).mean()))
-
-        return np.array(rmsd)
+        return rmsd_calc.results.rmsd[:, 2]
