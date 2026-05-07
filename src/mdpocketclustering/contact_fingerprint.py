@@ -25,11 +25,12 @@ def compute_ligand_residue_contacts(
     protein = u.select_atoms("protein")
 
     if lig.n_atoms == 0 or protein.n_atoms == 0:
+        print(f"❌ No ligand/protein in {run_id}")
         return pd.DataFrame()
 
     residues = protein.residues
 
-    # cache atoms (speed boost)
+    # cache atoms
     res_atoms = [res.atoms for res in residues]
 
     data = []
