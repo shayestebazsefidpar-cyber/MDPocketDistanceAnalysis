@@ -1,0 +1,20 @@
+grid_spacing: 1.0
+
+points_inclusion_sphere:
+  - center: [54.78, 47.68, 48.10]
+    radius: 10.0
+
+contiguous_pocket_seed_sphere:
+  - center: [54.78, 47.68, 48.10]
+    radius: 4.0
+
+save_points: true
+distance_cutoff: 1.09
+convex_hull_exclusion: true
+
+use_ray: true
+n_cores: 8
+
+save_individual_pocket_volumes: true
+save_pocket_volumes_trajectory: true
+save_volumetric_density_map: true
