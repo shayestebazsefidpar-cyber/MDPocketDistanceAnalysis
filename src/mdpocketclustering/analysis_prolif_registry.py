@@ -1,5 +1,4 @@
 import os
-from collections import defaultdict
 
 import MDAnalysis as mda
 import pandas as pd
@@ -14,9 +13,6 @@ def run_prolif_for_registry(
     n_jobs=1,
 ):
 
-    # -----------------------------
-    # checkpoint folder (global for function)
-    # -----------------------------
     checkpoint_dir = "checkpoints_prolif"
     os.makedirs(checkpoint_dir, exist_ok=True)
 
@@ -24,16 +20,10 @@ def run_prolif_for_registry(
 
         checkpoint_file = os.path.join(checkpoint_dir, f"{run.run_id}.csv")
 
-        # -----------------------------
-        # SKIP if already computed
-        # -----------------------------
         if os.path.exists(checkpoint_file):
             print(f"⏩ Skip {run.run_id}")
             return pd.read_csv(checkpoint_file)
 
-        # -----------------------------
-        # load system
-        # -----------------------------
         u = mda.Universe(run.files.topology, run.files.trajectory)
 
         muts = run.system.mutations
@@ -44,14 +34,25 @@ def run_prolif_for_registry(
         )
 
         protein = u.select_atoms("protein")
-        ligand = u.select_atoms(ligand_sel)
 
-        if len(ligand) == 0:
+        possible_ligands = ["AP1", "ATP", "ADP", "LIG", "MG", "MG1"]
+
+        existing_resnames = set(u.atoms.resnames)
+
+        found_ligands = [lig for lig in possible_ligands if lig in existing_resnames]
+
+        if len(found_ligands) == 0:
             print(f"❌ No ligand in run {run.run_id}")
             return pd.DataFrame()
 
+        ligand_sel = " or ".join([f"resname {lig}" for lig in found_ligands])
+
+        print(f"🧪 {run.run_id} ligands: {found_ligands}")
+
+        ligand = u.select_atoms(ligand_sel)
+
         # -----------------------------
-        # fingerprint setup
+        # fingerprint
         # -----------------------------
         fp = Fingerprint(
             [
@@ -71,6 +72,7 @@ def run_prolif_for_registry(
         )
 
         fp.run(u.trajectory[::stride], ligand, protein)
+
         df = fp.to_dataframe()
 
         meta = {
@@ -79,6 +81,7 @@ def run_prolif_for_registry(
         }
 
         core = df.drop(columns=list(meta.keys()), errors="ignore")
+
         core.columns = pd.MultiIndex.from_tuples(core.columns)
 
         long_df = (
@@ -95,20 +98,19 @@ def run_prolif_for_registry(
             )
         )
 
+        long_df["residue"] = long_df["protein"].str.extract(r"([A-Z]+)")
+        long_df["resid"] = long_df["protein"].str.extract(r"(\d+)").astype(int)
+
+        long_df = long_df.drop(columns=["protein"])
+
         for k, v in meta.items():
             long_df[k] = v
 
-        # -----------------------------
-        # SAVE CHECKPOINT
-        # -----------------------------
         long_df.to_csv(checkpoint_file, index=False)
         print(f"💾 Saved: {checkpoint_file}")
 
         return long_df
 
-    # -----------------------------
-    # RUN (serial or parallel)
-    # -----------------------------
     if n_jobs == 1:
         results = [run_single(r) for r in registry.runs]
     else:
