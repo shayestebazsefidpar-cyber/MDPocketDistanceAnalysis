@@ -1,4 +1,5 @@
 import os
+import warnings
 
 import MDAnalysis as mda
 import pandas as pd
@@ -8,89 +9,87 @@ from tqdm import tqdm
 
 def run_prolif_for_registry(
     registry,
-    ligand_sel=None,
-    out_csv="out.csv",
-    checkpoint_csv="checkpoint.csv",
-    resume=True,
+    possible_ligands=None,
+    stride=20,
+    outdir="prolif_output",
+    save_csv=True,
 ):
+    """
+    Run ProLIF for all trajectories in a registry with automatic ligand detection.
+    """
 
-    processed_runs = set()
+    if possible_ligands is None:
+        possible_ligands = ["AP1", "MG1", "ATP", "ADP", "LIG", "MG"]
 
-    if resume and os.path.exists(checkpoint_csv):
-        try:
-            existing = pd.read_csv(checkpoint_csv)
-            processed_runs = set(existing["run_id"].unique())
-        except Exception:
-            processed_runs = set()
+    os.makedirs(outdir, exist_ok=True)
 
-    if not os.path.exists(out_csv):
-        pd.DataFrame(
-            columns=[
-                "Frame",
-                "ligand",
-                "interaction",
-                "value",
-                "residue",
-                "resid",
-                "run_id",
-                "mutation",
-            ]
-        ).to_csv(out_csv, index=False)
+    all_data = []
 
-    for run in tqdm(registry.runs, desc="ProLIF processing"):
-        if run.run_id in processed_runs:
-            continue
-
+    for run in tqdm(registry.runs, desc="ProLIF registry runs"):
+        # --- load universe ---
         u = mda.Universe(run.files.topology, run.files.trajectory)
 
-        selection = ligand_sel if ligand_sel else "resname ATP"
-        ligand = u.select_atoms(selection)
+        # --- detect ligand automatically ---
+        found = [l for l in possible_ligands if l in set(u.atoms.resnames)]
+
+        if not found:
+            warnings.warn(f"[{run.run_id}] no ligand found, skipping")
+            continue
+
+        ligand_sel = "resname " + " ".join(found)
+
+        ligand = u.select_atoms(ligand_sel)
         protein = u.select_atoms("protein")
 
         if len(ligand) == 0:
+            warnings.warn(f"[{run.run_id}] empty ligand selection, skipping")
             continue
 
-        ligand_name = selection.replace("resname", "").strip()
+        # --- mutation ---
+        mutations = run.system.mutations
+        mutation = (
+            f"{mutations[0].chain}:{mutations[0].wildtype}"
+            f"{mutations[0].resid}{mutations[0].mutant}"
+            if mutations
+            else "WT"
+        )
 
-        fp = Fingerprint()
-        fp.run(u.trajectory, lig=ligand, prot=protein)
+        # --- fingerprint ---
+        fp = Fingerprint(
+            [
+                "HBDonor",
+                "HBAcceptor",
+                "Hydrophobic",
+                "PiStacking",
+                "PiCation",
+                "CationPi",
+                "Anionic",
+                "Cationic",
+                "EdgeToFace",
+                "FaceToFace",
+                "MetalAcceptor",
+                "MetalDonor",
+            ]
+        )
+
+        for ts in tqdm(u.trajectory[::stride], desc=f"{run.run_id}", leave=False):
+            fp.run([ts], ligand, protein)
 
         df = fp.to_dataframe()
 
-        records = []
+        # --- flatten to long format (simple + stable) ---
+        df = df.reset_index()
+        df = df.melt(id_vars=df.columns[:3], var_name="interaction", value_name="value")
 
-        if isinstance(df.columns, pd.MultiIndex):
-            for frame_idx, row in df.iterrows():
-                for col, value in row.items():
-                    residue = col[0] if len(col) > 0 else "unknown"
-                    resid = col[1] if len(col) > 1 else "unknown"
-                    interaction = col[2] if len(col) > 2 else "unknown"
+        df["run_id"] = run.run_id
+        df["mutation"] = mutation
 
-                    records.append(
-                        {
-                            "Frame": frame_idx,
-                            "ligand": ligand_name,
-                            "interaction": interaction,
-                            "value": bool(value),
-                            "residue": residue,
-                            "resid": resid,
-                            "run_id": run.run_id,
-                            "mutation": f"A:{run.system.mutations[0].wildtype}{run.system.mutations[0].resid}",
-                        }
-                    )
+        # --- save per run ---
+        if save_csv:
+            outpath = f"{outdir}/prolif_{run.run_id}.csv"
+            df.to_csv(outpath, index=False)
+            warnings.warn(f"[{run.run_id}] saved → {outpath}")
 
-        df_run = pd.DataFrame(records)
+        all_data.append(df)
 
-        df_run.to_csv(
-            out_csv, mode="a", header=False, index=False, encoding="utf-8-sig"
-        )
-
-        df_run.to_csv(
-            checkpoint_csv,
-            mode="a",
-            header=not os.path.exists(checkpoint_csv),
-            index=False,
-            encoding="utf-8-sig",
-        )
-
-    return out_csv
+    return pd.concat(all_data, ignore_index=True) if all_data else pd.DataFrame()

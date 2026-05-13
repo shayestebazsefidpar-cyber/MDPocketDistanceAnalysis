@@ -3,127 +3,104 @@ import pytest
 
 from mdpocketclustering.analysis_prolif_registry import run_prolif_for_registry
 
+# -----------------------------
+# FAKE OBJECTS
+# -----------------------------
 
-# -------------------------
-# MOCK OBJECTS
-# -------------------------
-class MockMutation:
+
+class FakeFiles:
     def __init__(self):
-        self.wildtype = "A"
-        self.resid = 525
+        self.topology = "fake.pdb"
+        self.trajectory = "fake.dcd"
 
 
-class MockSystem:
+class FakeMutation:
     def __init__(self):
-        self.mutations = [MockMutation()]
+        self.chain = "A"
+        self.wildtype = "WT"
+        self.resid = 100
+        self.mutant = "M"
 
 
-class MockFiles:
+class FakeSystem:
     def __init__(self):
-        self.topology = "fake_topology.pdb"
-        self.trajectory = "fake_trajectory.dcd"
+        self.mutations = [FakeMutation()]
 
 
-class MockRun:
-    def __init__(self, run_id):
-        self.run_id = run_id
-        self.files = MockFiles()
-        self.system = MockSystem()
-
-
-class MockRegistry:
+class FakeRun:
     def __init__(self):
-        self.runs = [MockRun("test_run_1")]
+        self.run_id = "TEST_RUN"
+        self.files = FakeFiles()
+        self.system = FakeSystem()
 
 
-# -------------------------
-# TEST
-# -------------------------
-def test_run_prolif_for_registry_smoke(tmp_path, monkeypatch):
+class FakeRegistry:
+    def __init__(self):
+        self.runs = [FakeRun()]
 
-    registry = MockRegistry()
 
-    # -------------------------
-    # FIXED FAKE MDANALYSIS UNIVERSE
-    # -------------------------
-    class FakeAtomGroup:
-        def __init__(self):
-            # IMPORTANT FIX: MDAnalysis expects .atoms attribute
-            self.atoms = self
+class FakeUniverse:
+    """
+    Minimal MDAnalysis replacement
+    """
 
-        def __len__(self):
-            return 1
+    def __init__(self, topology, trajectory):
+        self.atoms = self
+        self.resnames = ["ATP", "MG1"]
+        self.trajectory = [0, 1, 2]
 
-    class FakeTrajectory:
+    def select_atoms(self, sel):
+        return [1, 2, 3]  # non-empty fake selection
+
+
+class FakeFingerprint:
+    """
+    Minimal ProLIF replacement
+    """
+
+    def run(self, traj, ligand, protein):
         pass
 
-    class FakeUniverse:
-        def __init__(self, top, traj):
-            self.top = top
-            self.trajectory = FakeTrajectory()
+    def to_dataframe(self):
+        return pd.DataFrame(
+            {
+                "interaction": ["HBDonor", "Hydrophobic"],
+                "value": [1, 0],
+            }
+        )
 
-        def select_atoms(self, sel):
-            return FakeAtomGroup()
 
-    monkeypatch.setattr("MDAnalysis.Universe", FakeUniverse)
+# -----------------------------
+# TEST
+# -----------------------------
 
-    # -------------------------
-    # MOCK PROLIF
-    # -------------------------
-    class FakeFingerprint:
-        def __init__(self):
-            pass
 
-        def run(self, traj, lig=None, prot=None):
-            pass
+def test_run_prolif_for_registry(monkeypatch):
 
-        def to_dataframe(self):
-            index = [0, 1]
+    import mdpocketclustering.analysis_prolif_registry as mod
 
-            columns = pd.MultiIndex.from_tuples(
-                [
-                    ("ARG", 525, "HBDonor"),
-                    ("LYS", 199, "PiStacking"),
-                ]
-            )
+    # patch external dependencies
+    monkeypatch.setattr(mod.mda, "Universe", FakeUniverse)
+    monkeypatch.setattr(mod, "Fingerprint", FakeFingerprint)
 
-            data = [
-                [True, False],
-                [False, True],
-            ]
+    registry = FakeRegistry()
 
-            return pd.DataFrame(data, index=index, columns=columns)
+    df = run_prolif_for_registry(registry, stride=1, save_csv=False)
 
-    monkeypatch.setattr("prolif.Fingerprint", FakeFingerprint)
-
-    # -------------------------
-    # RUN FUNCTION
-    # -------------------------
-    out_csv = tmp_path / "out.csv"
-
-    result = run_prolif_for_registry(
-        registry,
-        ligand_sel="resname ATP",
-        out_csv=str(out_csv),
-    )
-
-    # -------------------------
+    # -----------------------------
     # ASSERTIONS
-    # -------------------------
-    assert isinstance(result, pd.DataFrame)
-    assert not result.empty
+    # -----------------------------
 
-    expected_cols = {
-        "Frame",
-        "ligand",
-        "interaction",
-        "value",
-        "residue",
-        "resid",
-        "run_id",
-        "mutation",
-    }
+    assert isinstance(df, pd.DataFrame)
 
-    assert set(result.columns) == expected_cols
+    # required columns from your pipeline
+    assert "run_id" in df.columns
+    assert "mutation" in df.columns
+    assert "interaction" in df.columns
+    assert "value" in df.columns
 
-    assert out_csv.exists()
+    # should return data
+    assert len(df) > 0
+
+    # check registry mapping
+    assert df["run_id"].iloc[0] == "TEST_RUN"
