@@ -1,120 +1,107 @@
-import os
-
 import MDAnalysis as mda
+import MDAnalysis.analysis.prolif
 import pandas as pd
-from joblib import Parallel, delayed
-from prolif import Fingerprint
 
 
-def run_prolif_for_registry(
-    registry,
-    output_dir="prolife_output",
-    output_file="prolif_all_runs.csv",
-    stride=20,
-    n_jobs=1,
-):
+def run_prolif_for_registry(registry, ligand_sel=None, out_csv=None):
 
-    os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(output_dir, output_file)
+    all_frames = []
 
-    # create file with header only if not exists
-    if not os.path.exists(output_path):
-        pd.DataFrame().to_csv(output_path, index=False)
-
-    def run_single(run):
-
-        print(f"\n🚀 Running: {run.run_id}")
-
+    for run in registry.runs:
+        # -------------------------
+        # Load system
+        # -------------------------
         u = mda.Universe(run.files.topology, run.files.trajectory)
 
-        muts = run.system.mutations
-        mutation = (
-            f"{muts[0].chain}:{muts[0].wildtype}{muts[0].resid}{muts[0].mutant}"
-            if muts
-            else "WT"
-        )
+        # -------------------------
+        # Ligand selection
+        # -------------------------
+        selection = ligand_sel if ligand_sel is not None else "resname ATP"
+        ligand_atoms = u.select_atoms(selection)
 
-        protein = u.select_atoms("protein")
+        if len(ligand_atoms) == 0:
+            raise ValueError("Ligand not found")
 
-        # LIGAND DETECTION
+        ligand_name = selection.replace("resname", "").strip()
 
-        possible_ligands = ["AP1", "ATP", "ADP", "LIG", "MG", "MG1"]
-
-        found_ligands = [
-            lig for lig in possible_ligands if lig in set(u.atoms.resnames)
-        ]
-
-        if len(found_ligands) == 0:
-            print(f"❌ No ligand in {run.run_id}")
-            return None
-
-        ligand_sel = " or ".join([f"resname {lig}" for lig in found_ligands])
-
-        ligand = u.select_atoms(ligand_sel)
-
-        fp = Fingerprint(
-            [
-                "HBDonor",
-                "HBAcceptor",
-                "Hydrophobic",
-                "PiStacking",
-                "PiCation",
-                "CationPi",
-                "Anionic",
-                "Cationic",
-                "EdgeToFace",
-                "FaceToFace",
-                "MetalAcceptor",
-                "MetalDonor",
-            ]
-        )
-
-        fp.run(u.trajectory[::stride], ligand, protein)
-
+        # -------------------------
+        # ProLIF fingerprint
+        # -------------------------
+        fp = MDAnalysis.analysis.prolif.Fingerprint(u)
         df = fp.to_dataframe()
 
-        meta = {
-            "run_id": run.run_id,
-            "mutation": mutation,
-        }
+        # -------------------------
+        # REQUIRED: expand MultiIndex into residue + interaction
+        # -------------------------
+        if isinstance(df.columns, pd.MultiIndex):
+            records = []
 
-        core = df.drop(columns=list(meta.keys()), errors="ignore")
-        core.columns = pd.MultiIndex.from_tuples(core.columns)
+            for frame_idx, row in df.iterrows():
+                for col, value in row.items():
+                    # col = (residue_name, resid, interaction_type)
+                    if isinstance(col, tuple):
+                        residue = col[0]
+                        resid = col[1]
+                        interaction = col[2] if len(col) > 2 else "unknown"
+                    else:
+                        residue = "unknown"
+                        resid = "unknown"
+                        interaction = str(col)
 
-        long_df = (
-            core.stack(level=[0, 1, 2])
-            .reset_index()
-            .rename(
-                columns={
-                    "level_0": "Frame",
-                    "level_1": "ligand",
-                    "level_2": "protein",
-                    "level_3": "interaction",
-                    0: "value",
-                }
-            )
-        )
+                    records.append(
+                        {
+                            "Frame": frame_idx,
+                            "ligand": ligand_name,
+                            "interaction": interaction,
+                            "value": bool(value),
+                            "residue": residue,
+                            "resid": resid,
+                            "run_id": run.run_id,
+                            "mutation": f"A:{run.system.mutations[0].wildtype}{run.system.mutations[0].resid}",
+                        }
+                    )
 
-        # split protein
-        long_df["residue"] = long_df["protein"].str.extract(r"([A-Z]+)")
-        long_df["resid"] = long_df["protein"].str.extract(r"(\d+)").astype(int)
-        long_df = long_df.drop(columns=["protein"])
+            df = pd.DataFrame(records)
 
-        for k, v in meta.items():
-            long_df[k] = v
+        else:
+            # fallback (rare case)
+            df = df.reset_index(drop=True)
+            df["Frame"] = df.index
+            df["ligand"] = ligand_name
+            df["interaction"] = "unknown"
+            df["value"] = True
+            df["residue"] = "unknown"
+            df["resid"] = "unknown"
+            df["run_id"] = run.run_id
+            df["mutation"] = "unknown"
 
-        file_exists = os.path.isfile(output_path)
+        # -------------------------
+        # enforce final column order
+        # -------------------------
+        df = df[
+            [
+                "Frame",
+                "ligand",
+                "interaction",
+                "value",
+                "residue",
+                "resid",
+                "run_id",
+                "mutation",
+            ]
+        ]
 
-        long_df.to_csv(output_path, mode="a", header=not file_exists, index=False)
+        all_frames.append(df)
 
-        print(f"💾 appended → {run.run_id}")
+    # -------------------------
+    # merge runs
+    # -------------------------
+    final_df = pd.concat(all_frames, ignore_index=True)
 
-        return run.run_id
+    # -------------------------
+    # export CSV
+    # -------------------------
+    if out_csv:
+        final_df.to_csv(out_csv, index=False, encoding="utf-8-sig")
 
-    if n_jobs == 1:
-        for r in registry.runs:
-            run_single(r)
-    else:
-        Parallel(n_jobs=n_jobs)(delayed(run_single)(r) for r in registry.runs)
-
-    print(f"\n✅ DONE → {output_path}")
+    return final_df
