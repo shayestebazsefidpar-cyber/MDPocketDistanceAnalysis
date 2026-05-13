@@ -1,52 +1,70 @@
+import os
+
 import MDAnalysis as mda
-import MDAnalysis.analysis.prolif
 import pandas as pd
+from prolif import Fingerprint
+from tqdm import tqdm
 
 
-def run_prolif_for_registry(registry, ligand_sel=None, out_csv=None):
+def run_prolif_for_registry(
+    registry,
+    ligand_sel=None,
+    out_csv="out.csv",
+    checkpoint_csv="checkpoint.csv",
+    resume=True,
+):
 
-    all_frames = []
+    processed_runs = set()
 
-    for run in registry.runs:
-        # -------------------------
-        # Load system
-        # -------------------------
+    if resume and os.path.exists(checkpoint_csv):
+        try:
+            existing = pd.read_csv(checkpoint_csv)
+            processed_runs = set(existing["run_id"].unique())
+        except Exception:
+            processed_runs = set()
+
+    if not os.path.exists(out_csv):
+        pd.DataFrame(
+            columns=[
+                "Frame",
+                "ligand",
+                "interaction",
+                "value",
+                "residue",
+                "resid",
+                "run_id",
+                "mutation",
+            ]
+        ).to_csv(out_csv, index=False)
+
+    for run in tqdm(registry.runs, desc="ProLIF processing"):
+        if run.run_id in processed_runs:
+            continue
+
         u = mda.Universe(run.files.topology, run.files.trajectory)
 
-        # -------------------------
-        # Ligand selection
-        # -------------------------
-        selection = ligand_sel if ligand_sel is not None else "resname ATP"
-        ligand_atoms = u.select_atoms(selection)
+        selection = ligand_sel if ligand_sel else "resname ATP"
+        ligand = u.select_atoms(selection)
+        protein = u.select_atoms("protein")
 
-        if len(ligand_atoms) == 0:
-            raise ValueError("Ligand not found")
+        if len(ligand) == 0:
+            continue
 
         ligand_name = selection.replace("resname", "").strip()
 
-        # -------------------------
-        # ProLIF fingerprint
-        # -------------------------
-        fp = MDAnalysis.analysis.prolif.Fingerprint(u)
+        fp = Fingerprint()
+        fp.run(u.trajectory, lig=ligand, prot=protein)
+
         df = fp.to_dataframe()
 
-        # -------------------------
-        # REQUIRED: expand MultiIndex into residue + interaction
-        # -------------------------
-        if isinstance(df.columns, pd.MultiIndex):
-            records = []
+        records = []
 
+        if isinstance(df.columns, pd.MultiIndex):
             for frame_idx, row in df.iterrows():
                 for col, value in row.items():
-                    # col = (residue_name, resid, interaction_type)
-                    if isinstance(col, tuple):
-                        residue = col[0]
-                        resid = col[1]
-                        interaction = col[2] if len(col) > 2 else "unknown"
-                    else:
-                        residue = "unknown"
-                        resid = "unknown"
-                        interaction = str(col)
+                    residue = col[0] if len(col) > 0 else "unknown"
+                    resid = col[1] if len(col) > 1 else "unknown"
+                    interaction = col[2] if len(col) > 2 else "unknown"
 
                     records.append(
                         {
@@ -61,47 +79,18 @@ def run_prolif_for_registry(registry, ligand_sel=None, out_csv=None):
                         }
                     )
 
-            df = pd.DataFrame(records)
+        df_run = pd.DataFrame(records)
 
-        else:
-            # fallback (rare case)
-            df = df.reset_index(drop=True)
-            df["Frame"] = df.index
-            df["ligand"] = ligand_name
-            df["interaction"] = "unknown"
-            df["value"] = True
-            df["residue"] = "unknown"
-            df["resid"] = "unknown"
-            df["run_id"] = run.run_id
-            df["mutation"] = "unknown"
+        df_run.to_csv(
+            out_csv, mode="a", header=False, index=False, encoding="utf-8-sig"
+        )
 
-        # -------------------------
-        # enforce final column order
-        # -------------------------
-        df = df[
-            [
-                "Frame",
-                "ligand",
-                "interaction",
-                "value",
-                "residue",
-                "resid",
-                "run_id",
-                "mutation",
-            ]
-        ]
+        df_run.to_csv(
+            checkpoint_csv,
+            mode="a",
+            header=not os.path.exists(checkpoint_csv),
+            index=False,
+            encoding="utf-8-sig",
+        )
 
-        all_frames.append(df)
-
-    # -------------------------
-    # merge runs
-    # -------------------------
-    final_df = pd.concat(all_frames, ignore_index=True)
-
-    # -------------------------
-    # export CSV
-    # -------------------------
-    if out_csv:
-        final_df.to_csv(out_csv, index=False, encoding="utf-8-sig")
-
-    return final_df
+    return out_csv

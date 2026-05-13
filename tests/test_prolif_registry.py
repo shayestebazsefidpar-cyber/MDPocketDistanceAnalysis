@@ -1,84 +1,129 @@
-import MDAnalysis as mda
 import pandas as pd
+import pytest
+
+from mdpocketclustering.analysis_prolif_registry import run_prolif_for_registry
 
 
-def run_prolif_for_registry(registry, ligand_sel=None, stride=1, n_jobs=1):
-    """
-    Run protein-ligand interaction profiling for all runs in registry.
-    """
+# -------------------------
+# MOCK OBJECTS
+# -------------------------
+class MockMutation:
+    def __init__(self):
+        self.wildtype = "A"
+        self.resid = 525
 
-    all_dfs = []
 
-    for run in registry.runs:
-        # -------------------------
-        # Load universe
-        # -------------------------
-        u = mda.Universe(run.files.topology, run.files.trajectory)
+class MockSystem:
+    def __init__(self):
+        self.mutations = [MockMutation()]
 
-        # -------------------------
-        # ligand selection FIX
-        # -------------------------
-        selection = ligand_sel if ligand_sel is not None else "resname LIG"
-        ligand_atoms = u.select_atoms(selection)
 
-        # fallback if selection fails
-        if len(ligand_atoms) == 0:
-            possible_ligands = ["AP1", "ATP", "ADP", "LIG", "MG", "MG1"]
-            found = [lig for lig in possible_ligands if lig in set(u.atoms.resnames)]
+class MockFiles:
+    def __init__(self):
+        self.topology = "fake_topology.pdb"
+        self.trajectory = "fake_trajectory.dcd"
 
-            if len(found) > 0:
-                selection = f"resname {' '.join(found)}"
-                ligand_atoms = u.select_atoms(selection)
 
-        # -------------------------
-        # fingerprint calculation (mock-compatible)
-        # -------------------------
-        fp = mda.analysis.prolif.Fingerprint(u)
+class MockRun:
+    def __init__(self, run_id):
+        self.run_id = run_id
+        self.files = MockFiles()
+        self.system = MockSystem()
 
-        df = fp.to_dataframe()
 
-        # -------------------------
-        # add metadata columns (required by tests)
-        # -------------------------
-        df["run_id"] = run.run_id
+class MockRegistry:
+    def __init__(self):
+        self.runs = [MockRun("test_run_1")]
 
-        # mutation formatting
-        mutations = run.system.mutations
-        if mutations:
-            m = mutations[0]
-            df["mutation"] = f"{m.chain}{m.resid}{m.wildtype}->{m.mutant}"
-        else:
-            df["mutation"] = "NA"
 
-        # -------------------------
-        # standard column normalization (if needed)
-        # -------------------------
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = [
-                "_".join([str(i) for i in col if i is not None]) for col in df.columns
+# -------------------------
+# TEST
+# -------------------------
+def test_run_prolif_for_registry_smoke(tmp_path, monkeypatch):
+
+    registry = MockRegistry()
+
+    # -------------------------
+    # FIXED FAKE MDANALYSIS UNIVERSE
+    # -------------------------
+    class FakeAtomGroup:
+        def __init__(self):
+            # IMPORTANT FIX: MDAnalysis expects .atoms attribute
+            self.atoms = self
+
+        def __len__(self):
+            return 1
+
+    class FakeTrajectory:
+        pass
+
+    class FakeUniverse:
+        def __init__(self, top, traj):
+            self.top = top
+            self.trajectory = FakeTrajectory()
+
+        def select_atoms(self, sel):
+            return FakeAtomGroup()
+
+    monkeypatch.setattr("MDAnalysis.Universe", FakeUniverse)
+
+    # -------------------------
+    # MOCK PROLIF
+    # -------------------------
+    class FakeFingerprint:
+        def __init__(self):
+            pass
+
+        def run(self, traj, lig=None, prot=None):
+            pass
+
+        def to_dataframe(self):
+            index = [0, 1]
+
+            columns = pd.MultiIndex.from_tuples(
+                [
+                    ("ARG", 525, "HBDonor"),
+                    ("LYS", 199, "PiStacking"),
+                ]
+            )
+
+            data = [
+                [True, False],
+                [False, True],
             ]
 
-        all_dfs.append(df)
+            return pd.DataFrame(data, index=index, columns=columns)
+
+    monkeypatch.setattr("prolif.Fingerprint", FakeFingerprint)
 
     # -------------------------
-    # combine runs
+    # RUN FUNCTION
     # -------------------------
-    final_df = pd.concat(all_dfs, ignore_index=True)
+    out_csv = tmp_path / "out.csv"
 
-    # required column safety (tests expect these)
-    if "Frame" not in final_df.columns:
-        final_df["Frame"] = range(len(final_df))
+    result = run_prolif_for_registry(
+        registry,
+        ligand_sel="resname ATP",
+        out_csv=str(out_csv),
+    )
 
-    if "ligand" not in final_df.columns:
-        final_df["ligand"] = "AP1"
+    # -------------------------
+    # ASSERTIONS
+    # -------------------------
+    assert isinstance(result, pd.DataFrame)
+    assert not result.empty
 
-    if "protein" not in final_df.columns:
-        final_df["protein"] = "protein"
+    expected_cols = {
+        "Frame",
+        "ligand",
+        "interaction",
+        "value",
+        "residue",
+        "resid",
+        "run_id",
+        "mutation",
+    }
 
-    if "interaction" not in final_df.columns:
-        final_df["interaction"] = "unknown"
+    assert set(result.columns) == expected_cols
 
-    if "value" not in final_df.columns:
-        final_df["value"] = True
-
-    return final_df
+    assert out_csv.exists()
