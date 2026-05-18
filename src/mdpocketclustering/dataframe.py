@@ -5,13 +5,15 @@ def build_dataframe(all_sims):
     rows = []
 
     for sim in all_sims:
-        rows.append({
-            "mutation": sim.mutation,
-            "replicate": sim.replicate,
-            "ATP": bool(sim.has_atp),
-            "MG": bool(sim.has_mg),
-            "binding_energy": sim.binding_energy,
-        })
+        rows.append(
+            {
+                "mutation": sim.mutation,
+                "replicate": sim.replicate,
+                "ATP": bool(sim.has_atp),
+                "MG": bool(sim.has_mg),
+                "binding_energy": sim.binding_energy,
+            }
+        )
 
     return pd.DataFrame(rows)
 

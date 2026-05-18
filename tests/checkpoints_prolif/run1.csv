@@ -1,0 +1,5 @@
+Frame,ligand,protein,interaction,value,run_id,mutation
+0,AP1,ALA123,HBDonor,True,run1,A:L123A
+0,AP1,ALA123,HBAcceptor,False,run1,A:L123A
+1,AP1,ALA123,HBDonor,False,run1,A:L123A
+1,AP1,ALA123,HBAcceptor,True,run1,A:L123A
