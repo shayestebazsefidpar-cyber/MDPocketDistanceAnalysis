@@ -1,3 +1,5 @@
+# mdpocketclustering/analysis_prolif_registry.py
+
 import os
 import re
 import warnings
@@ -15,6 +17,7 @@ def run_prolif_for_registry(
     out_dir="prolif_output",
     resume=True,
 ):
+
 
     out_dir = os.path.abspath(out_dir)
     os.makedirs(out_dir, exist_ok=True)
@@ -36,22 +39,22 @@ def run_prolif_for_registry(
         done_runs = set()
 
     if not os.path.exists(output_csv):
-        pd.DataFrame(
-            columns=[
-                "Frame",
-                "ligand",
-                "interaction",
-                "value",
-                "residue",
-                "resid",
-                "run_id",
-                "mutation",
-            ]
-        ).to_csv(output_csv, index=False)
+        pd.DataFrame(columns=[
+            "Frame",
+            "ligand",
+            "interaction",
+            "value",
+            "residue",
+            "resid",
+            "run_id",
+            "mutation",
+        ]).to_csv(output_csv, index=False)
 
     for run in tqdm(registry.runs, desc="ProLIF"):
+
         run_id = str(run.run_id)
 
+        # SKIP IF DONE
         if run_id in done_runs:
             print(f"⏩ skipping {run_id}")
             continue
@@ -84,16 +87,25 @@ def run_prolif_for_registry(
             m = run.system.mutations[0] if run.system.mutations else None
             mutation = f"A:{m.wildtype}{m.resid}{m.mutant}" if m else "WT"
 
+
             fp = Fingerprint()
-            fp.run(u.trajectory[::stride], lig=ligand, prot=protein)
+
+            fp.run(
+                u.trajectory[::stride],
+                lig=ligand,
+                prot=protein,
+            )
 
             df = fp.to_dataframe()
 
             records = []
 
             if isinstance(df.columns, pd.MultiIndex):
+
                 for frame_idx, row in df.iterrows():
+
                     for col, value in row.items():
+
                         raw = str(col[0]).split(".")[0]
 
                         match = re.match(r"([A-Za-z]+)(\d+)", raw)
@@ -107,19 +119,18 @@ def run_prolif_for_registry(
 
                         interaction = col[2] if len(col) > 2 else "unknown"
 
-                        records.append(
-                            {
-                                "Frame": frame_idx,
-                                "ligand": ligand_name,
-                                "interaction": interaction,
-                                "value": bool(value),
-                                "residue": residue,
-                                "resid": resid,
-                                "run_id": run_id,
-                                "mutation": mutation,
-                            }
-                        )
+                        records.append({
+                            "Frame": frame_idx,
+                            "ligand": ligand_name,
+                            "interaction": interaction,
+                            "value": bool(value),
+                            "residue": residue,
+                            "resid": resid,
+                            "run_id": run_id,
+                            "mutation": mutation,
+                        })
 
+            # SKIP EMPTY
             if len(records) == 0:
                 print(f"⚠️ empty result for {run_id}")
                 continue
@@ -134,8 +145,12 @@ def run_prolif_for_registry(
                 encoding="utf-8-sig",
             )
 
+    =
             pd.DataFrame([{"run_id": run_id}]).to_csv(
-                done_file, mode="a", header=not os.path.exists(done_file), index=False
+                done_file,
+                mode="a",
+                header=not os.path.exists(done_file),
+                index=False,
             )
 
             done_runs.add(run_id)
